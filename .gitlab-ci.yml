@@ -1,0 +1,21 @@
+# Use a modern Python image from Docker Hub
+image: python:3.12
+
+# Define the stages of our pipeline
+stages:
+  - lint
+  - test
+
+# Job 1: Check code quality with Ruff
+lint-code:
+  stage: lint
+  script:
+    - pip install ruff==0.15.11
+    - ruff check .
+
+# Job 2: Run the test suite
+run-tests:
+  stage: test
+  script:
+    - pip install -e .
+    - pytest -m "not integration"

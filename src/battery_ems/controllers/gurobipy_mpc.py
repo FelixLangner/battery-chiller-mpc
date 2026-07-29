@@ -1,8 +1,6 @@
-import time
 import gurobipy as gp
 from gurobipy import GRB
 import numpy as np
-import json
 import matplotlib.pyplot as plt
 
 # Per-room comfort-slack penalty (€/°C-equivalent weight on Slack_T). Default

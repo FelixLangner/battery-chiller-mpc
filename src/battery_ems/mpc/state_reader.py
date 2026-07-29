@@ -19,7 +19,8 @@ log = logging.getLogger(__name__)
 # service anchored to the real clock regardless of simulated drift, and
 # tariff/comfort-hour logic only depends on hour-of-day, which staying
 # close to real time keeps sane.)
-_clock = lambda: datetime.now(timezone.utc)
+def _clock() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def set_clock(fn) -> None:

@@ -25,7 +25,8 @@ _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 # resolve against a SyntheticBuilding's simulated clock during a
 # fast-forwarded run instead of real wall-clock time -- see the matching
 # hook in state_reader.py for why this matters.
-_clock = lambda: datetime.now(timezone.utc)
+def _clock() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def set_clock(fn) -> None:

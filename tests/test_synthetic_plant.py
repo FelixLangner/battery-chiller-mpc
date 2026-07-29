@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from battery_ems.emulators.synthetic_building.rc_plant import (
-    RCParams, ROOM_PARAMS, RCPlant, discretize,
+    ROOM_PARAMS, RCPlant, discretize,
 )
 from battery_ems.emulators.synthetic_building.store import TimeSeriesStore
 

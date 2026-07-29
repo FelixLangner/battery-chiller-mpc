@@ -33,7 +33,7 @@ from battery_ems.mpc.control_writer import ControlWriter  # noqa: E402
 from battery_ems.mpc.forecast_provider import ForecastProvider  # noqa: E402
 from battery_ems.mpc.rc_observer import RCObserver  # noqa: E402
 from battery_ems.mpc.run_mpc import (  # noqa: E402
-    CONFIG_DIR, HORIZON_STEPS, LOG_FILE, STATE_FILE, load_mpc_config, run_one_step,
+    HORIZON_STEPS, LOG_FILE, STATE_FILE, load_mpc_config, run_one_step,
 )
 from battery_ems.mpc.state_reader import StateReader  # noqa: E402
 from battery_ems.mpc.step_logger import StepLogger  # noqa: E402
