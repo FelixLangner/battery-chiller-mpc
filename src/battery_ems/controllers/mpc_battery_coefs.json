@@ -1,0 +1,12 @@
+{
+  "battery_demo": {
+    "capacity_kwh": 6.0,
+    "efficiency_charge": 0.95,
+    "efficiency_discharge": 0.95,
+    "power_offset_w": 0.0,
+    "val_rmse_pct": 0.0
+  },
+  "_meta": {
+    "source": "hand-authored synthetic ground truth, not fit from real data"
+  }
+}

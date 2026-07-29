@@ -1,22 +1,25 @@
 """
-MPC control loop for the synthetic demo building.
+Joint cooling+PV+battery MPC control loop for the synthetic demo building.
 
 Usage:
     python -m battery_ems.mpc.run_mpc            # live control (writes to the synthetic PLC every 15 min)
-    python -m battery_ems.mpc.run_mpc --dry-run  # one solve, no PLC, saves plan plot to figures/
+    python -m battery_ems.mpc.run_mpc --dry-run  # one solve, no PLC, saves plan plots to figures/
 
 Step sequence each iteration:
     1. Read sensors from the synthetic store (via EnergyDataInterface)
     2. Fill any NaN gaps with observer / last-known fallbacks
     3. Update Kalman observer (3 × 5-min sub-steps)
-    4. Fetch 24-h weather + price forecasts
-    5. Solve MPC (Gurobi)
+    4. Fetch 24-h weather/price/PV/load forecasts
+    5. Solve the joint MPC (Gurobi) -- chiller/fan AND battery charge/discharge,
+       sharing one objective (total grid cost) and one grid-balance constraint
     6. Write decisions to the synthetic PLC (skipped in dry-run)
     7. Log step to JSONL
 
-Identical control-loop logic to the private repo this is a sanitized demo
-of -- only the I/O seams (StateReader/EnergyDataInterface, PLC_API) are
-synthetic; see README.md.
+Ported from the private repo's feature/pv-battery-mpc branch (the real joint
+formulation), not main (cooling-only) -- see controllers/gurobipy_mpc.py's
+module docstring. PV/load forecasting here is a simple deterministic model,
+not the private repo's live Chronos-2 + 14-day-history pipeline -- see
+pv_load_forecast.py's docstring for why.
 """
 import argparse
 import json
@@ -37,6 +40,7 @@ from battery_ems.interfaces.PLC_API import PLC_API
 from battery_ems.mpc.control_writer import ControlWriter
 from battery_ems.mpc.forecast_provider import ForecastProvider
 from battery_ems.mpc.prediction_writer import write_predictions
+from battery_ems.mpc.pv_load_forecast import PVLoadForecastProvider
 from battery_ems.mpc.rc_observer import RCObserver
 from battery_ems.mpc.state_reader import StateReader
 from battery_ems.mpc.step_logger import StepLogger
@@ -80,7 +84,14 @@ def load_mpc_config() -> dict:
         fan_physics = json.load(f)
     with open(CONFIG_DIR / "mpc_rc_models.json") as f:
         rc_models = json.load(f)
-    return {"plant_physics": plant_physics, "fan_physics": fan_physics, "rc_models": rc_models}
+    with open(CONFIG_DIR / "mpc_battery_coefs.json") as f:
+        battery_coefs = json.load(f)
+    return {
+        "plant_physics": plant_physics,
+        "fan_physics": fan_physics,
+        "rc_models": rc_models,
+        "battery_physics": battery_coefs["battery_demo"],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +99,7 @@ def load_mpc_config() -> dict:
 # ---------------------------------------------------------------------------
 
 def fill_sensor_gaps(measurements: dict, observer: RCObserver, rc_models: dict,
-                      fallback_state: dict) -> dict:
+                      fallback_state: dict, battery_capacity_kwh: float) -> dict:
     """
     Replace NaN sensor readings with the MPC's own prediction from the last
     successful solve where one exists, falling back further to
@@ -158,6 +169,16 @@ def fill_sensor_gaps(measurements: dict, observer: RCObserver, rc_models: dict,
             measurements["chiller_running"] = 0.0
             log.warning("chiller_running NaN — no prior solve yet, conservative fallback: OFF")
 
+    if math.isnan(measurements["battery_soc_kwh"]):
+        if predicted is not None and "SOC" in predicted:
+            measurements["battery_soc_kwh"] = predicted["SOC"]
+            log.warning(f"battery_soc_kwh NaN — using previous solve's prediction: "
+                        f"{measurements['battery_soc_kwh']:.2f} kWh")
+        else:
+            measurements["battery_soc_kwh"] = battery_capacity_kwh * 0.5
+            log.warning(f"battery_soc_kwh NaN — no prior solve yet, 50% fallback: "
+                        f"{measurements['battery_soc_kwh']:.2f} kWh")
+
     return measurements
 
 
@@ -168,19 +189,22 @@ def fill_sensor_gaps(measurements: dict, observer: RCObserver, rc_models: dict,
 def _handle_infeasible(
     fallback_state: dict, control_writer, dry_run: bool,
     timestamp, measurements, forecasts, observer, solve_time, mip_gap, logger,
+    holdover_blocks: int,
 ) -> None:
     fallback_state["consecutive_failures"] += 1
     n = fallback_state["consecutive_failures"]
 
-    if n <= HOLDOVER_BLOCKS and fallback_state["last_plan"] is not None:
+    if n <= holdover_blocks and fallback_state["last_plan"] is not None:
+        plan = fallback_state["last_plan"]
         holdover = {
-            "Chiller_Command": fallback_state["last_plan"]["Holdover_Chiller_Commands"][n - 1],
-            "Fan_Commands":    fallback_state["last_plan"]["Holdover_Fan_Commands"][n - 1],
+            "Chiller_Command": plan["Holdover_Chiller_Commands"][n - 1],
+            "Fan_Commands":    plan["Holdover_Fan_Commands"][n - 1],
+            "Battery_Power_kW": plan["Holdover_Battery_Power_kW"][n - 1],
         }
         log.warning(
-            f"MPC infeasible (#{n}/{HOLDOVER_BLOCKS}) — holdover block k={n} of last plan: "
+            f"MPC infeasible (#{n}/{holdover_blocks}) — holdover block k={n} of last plan: "
             f"chiller={'ON' if holdover['Chiller_Command'] else 'OFF'}, "
-            f"fans={holdover['Fan_Commands']}"
+            f"fans={holdover['Fan_Commands']}, battery={holdover['Battery_Power_kW']:.2f}kW"
         )
         written = None
         if not dry_run:
@@ -191,7 +215,7 @@ def _handle_infeasible(
         logger.log(timestamp, measurements, forecasts, holdover, written,
                    observer.x_state, solve_time, mip_gap, "infeasible_holdover")
     else:
-        log.error(f"MPC infeasible (#{n}) — hard fallback: supply=10°C, rooms=22°C.")
+        log.error(f"MPC infeasible (#{n}) — hard fallback: supply=10°C, rooms=22°C, battery idle.")
         written = None
         if not dry_run:
             try:
@@ -206,11 +230,11 @@ def _handle_infeasible(
 # Dry-run plot
 # ---------------------------------------------------------------------------
 
-def _save_plan_plot(vars_dict, params, forecasts, timestamp: datetime) -> None:
+def _save_plan_plot(vars_dict, params, forecasts, timestamp: datetime, binary_blocks: int) -> None:
     FIGURES_DIR.mkdir(exist_ok=True)
     out = FIGURES_DIR / f"dry_run_{timestamp.strftime('%Y%m%d_%H%M%S')}.png"
-    plot_mpc_results(vars_dict, params, forecasts, HORIZON_STEPS, save_path=out)
-    log.info(f"[DRY RUN] Plan plot saved: {out}")
+    plot_mpc_results(vars_dict, params, forecasts, HORIZON_STEPS, save_path=out, BINARY_BLOCKS=binary_blocks)
+    log.info(f"[DRY RUN] Plan plots saved: {out.stem}_cooling{out.suffix} / {out.stem}_battery{out.suffix}")
 
 
 # ---------------------------------------------------------------------------
@@ -222,10 +246,14 @@ def run_one_step(
     state_reader: StateReader,
     observer: RCObserver,
     forecast_provider: ForecastProvider,
+    pv_load_forecast_provider: PVLoadForecastProvider,
     control_writer,           # ControlWriter | None in dry-run
     logger: StepLogger,
     rc_models: dict,
     fallback_state: dict,
+    battery_capacity_kwh: float,
+    binary_blocks: int,
+    holdover_blocks: int,
     dry_run: bool = False,
     mode_end: datetime | None = None,
 ) -> None:
@@ -238,7 +266,7 @@ def run_one_step(
     except Exception as e:
         log.error(f"Sensor read failed: {e}. Skipping step.")
         return
-    measurements = fill_sensor_gaps(measurements, observer, rc_models, fallback_state)
+    measurements = fill_sensor_gaps(measurements, observer, rc_models, fallback_state, battery_capacity_kwh)
 
     T_amb = measurements["T_amb"]
     T_sup = measurements["T_sup"]
@@ -261,15 +289,20 @@ def run_one_step(
         "Temp_Lift_historical": T_lift_historical,
         "x_state_current": observer.x_state,
         "Chiller_On_prev": measurements["chiller_running"],
+        "SOC_current": measurements["battery_soc_kwh"],
     }
 
-    # 3. Forecasts
+    # 3. Forecasts: weather/price/comfort + PV/load
     forecasts = forecast_provider.get(HORIZON_STEPS, T_amb_current=T_amb, rooms=rooms, mode_end=mode_end)
+    pv_forecast, load_forecast = pv_load_forecast_provider.get(HORIZON_STEPS, now=timestamp)
+    forecasts["PV_forecast"] = pv_forecast
+    forecasts["Load_forecast"] = load_forecast
 
     # 4. Solve MPC
     t0 = time.time()
     try:
-        optimal_action = step_mpc(m, params, vars_dict, initial_states, forecasts, HORIZON_STEPS)
+        optimal_action = step_mpc(m, params, vars_dict, initial_states, forecasts, HORIZON_STEPS,
+                                   holdover_blocks=holdover_blocks)
         solve_time = time.time() - t0
         mip_gap = m.MIPGap if m.SolCount > 0 else None
         solver_status = {2: "optimal", 3: "infeasible", 5: "unbounded", 9: "time_limit"}.get(
@@ -288,6 +321,7 @@ def run_one_step(
         _handle_infeasible(
             fallback_state, control_writer, dry_run,
             timestamp, measurements, forecasts, observer, solve_time, mip_gap, logger,
+            holdover_blocks,
         )
         return
 
@@ -299,13 +333,16 @@ def run_one_step(
             "T_sup": vars_dict["T_sup"][k * BLOCK_SIZE].X,
             "T_amb": forecasts["T_amb"][k * BLOCK_SIZE],
             "Q_fan": {r: vars_dict["Q_fan"][r][k * BLOCK_SIZE - 1].X for r in rooms},
+            "SOC": vars_dict["SOC"][k * BLOCK_SIZE].X,
         }
-        for k in range(1, HOLDOVER_BLOCKS + 1)
+        for k in range(1, holdover_blocks + 1)
     ]
 
+    batt_kw = optimal_action["Battery_Power_kW"]
     log.info(
         f"Decision: chiller={'ON' if optimal_action['Chiller_Command'] else 'OFF'}, "
-        f"fans={optimal_action['Fan_Commands']}"
+        f"fans={optimal_action['Fan_Commands']}, "
+        f"battery={abs(batt_kw):.2f}kW {'discharge' if batt_kw >= 0 else 'charge'}"
     )
 
     if not dry_run:
@@ -318,7 +355,7 @@ def run_one_step(
     if dry_run:
         log.info("[DRY RUN] Skipping PLC write.")
         written = None
-        _save_plan_plot(vars_dict, params, forecasts, timestamp)
+        _save_plan_plot(vars_dict, params, forecasts, timestamp, binary_blocks)
     else:
         try:
             written = control_writer.write(optimal_action)
@@ -356,9 +393,11 @@ def main(dry_run: bool, immediate: bool = False, mode_end: datetime | None = Non
     log.info("Loading MPC config...")
     config = load_mpc_config()
     rc_models = config["rc_models"]
+    battery_capacity_kwh = config["battery_physics"]["capacity_kwh"]
 
-    log.info("Building parametric Gurobi model (once)...")
-    m, params, vars_dict = build_parametric_mpc(HORIZON_STEPS, config)
+    log.info("Building parametric joint MPC model (once)...")
+    m, params, vars_dict, binary_blocks = build_parametric_mpc(HORIZON_STEPS, config)
+    holdover_blocks = HOLDOVER_BLOCKS
 
     log.info("Initializing state reader and observer...")
     state_reader = StateReader(meter_config_file="meters_demo.yaml")
@@ -367,6 +406,7 @@ def main(dry_run: bool, immediate: bool = False, mode_end: datetime | None = Non
         observer.warmup_from_history(state_reader)
 
     forecast_provider = ForecastProvider()
+    pv_load_forecast_provider = PVLoadForecastProvider()
     logger = StepLogger(log_file=LOG_FILE)
     fallback_state = {"consecutive_failures": 0, "last_plan": None, "predicted_next": None}
 
@@ -378,9 +418,11 @@ def main(dry_run: bool, immediate: bool = False, mode_end: datetime | None = Non
         log.info("=== DRY RUN — no PLC connection, no writes ===")
         run_one_step(
             m, params, vars_dict,
-            state_reader, observer, forecast_provider,
+            state_reader, observer, forecast_provider, pv_load_forecast_provider,
             control_writer=None, logger=logger, rc_models=rc_models,
-            fallback_state=fallback_state, dry_run=True, mode_end=mode_end,
+            fallback_state=fallback_state, battery_capacity_kwh=battery_capacity_kwh,
+            binary_blocks=binary_blocks, holdover_blocks=holdover_blocks,
+            dry_run=True, mode_end=mode_end,
         )
         return
 
@@ -400,9 +442,10 @@ def main(dry_run: bool, immediate: bool = False, mode_end: datetime | None = Non
         try:
             run_one_step(
                 m, params, vars_dict,
-                state_reader, observer, forecast_provider,
+                state_reader, observer, forecast_provider, pv_load_forecast_provider,
                 control_writer, logger, rc_models,
-                fallback_state, mode_end=mode_end,
+                fallback_state, battery_capacity_kwh, binary_blocks, holdover_blocks,
+                mode_end=mode_end,
             )
         except Exception as e:
             log.exception(f"Unhandled error in control step: {e}")
@@ -416,7 +459,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--dry-run", dest="dry_run", action="store_true", default=None,
-        help="One solve, no PLC connection, no writes -- saves plan plot to figures/ and exits."
+        help="One solve, no PLC connection, no writes -- saves plan plots to figures/ and exits."
     )
     parser.add_argument(
         "--live", dest="dry_run", action="store_false",

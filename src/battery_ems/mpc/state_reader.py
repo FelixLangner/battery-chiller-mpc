@@ -104,6 +104,7 @@ class StateReader:
 
         Q_fan_measured = {r: self._read_Q_fan(r) for r in ROOM_QFAN_METERS}
         chiller_running = self._read_chiller_running()
+        battery_soc_kwh = self._read_battery_soc()
 
         return {
             "T_amb": T_amb,
@@ -114,7 +115,14 @@ class StateReader:
             "room_temps_history": room_temps_history,
             "Q_fan_measured": Q_fan_measured,
             "chiller_running": chiller_running,
+            "battery_soc_kwh": battery_soc_kwh,
         }
+
+    def _read_battery_soc(self) -> float:
+        now = _clock()
+        current_ts = _last_closed_bucket_start(now, 30)
+        df = self.db.get_meter_data(self.config["demo_battery_soc"], start="-8m", resolution="30s")
+        return _at_time(df, "soc_kwh", current_ts)
 
     def _read_weather_temp(self) -> tuple[float, float]:
         now = _clock()

@@ -1,34 +1,39 @@
 {
   "plant_thermal_model_on": {
-    "Constant": 8.0
+    "Intercept": 8.0,
+    "T_sup_current": 0.0,
+    "EnvTmp": 0.0,
+    "Total_Thermal_Load_kW": 0.0
   },
   "plant_thermal_model_off": {
-    "Intercept": 0.9,
-    "T_sup_current": 0.91,
-    "EnvTmp": 0.03,
-    "Total_Thermal_Load": -0.3
+    "Intercept": 0.85,
+    "T_sup_current": 0.90,
+    "EnvTmp": 0.032,
+    "Total_Thermal_Load_kW": -0.28
   },
   "plant_thermal_model": {
-    "Intercept": 0.9,
-    "T_sup_current": 0.91,
-    "Chiller_Command": -9.0,
-    "EnvTmp": 0.03,
-    "Total_Thermal_Load": -0.3
+    "Intercept": 0.85,
+    "T_sup_current": 0.90,
+    "Chiller_Command": -6.0,
+    "EnvTmp": 0.032,
+    "Total_Thermal_Load_kW": -0.28
   },
   "chiller_power_model": {
+    "standby_kW": 0.05,
     "active_intercept": 0.6,
     "Temp_Lift": 0.04,
-    "Total_Thermal_Load": -0.6,
-    "standby_kW": 0.05
+    "Delta_Temp_Lift": 0.0,
+    "Total_Thermal_Load": -0.6
   },
   "chiller_power_model_continuous": {
+    "standby_kW": 0.05,
     "active_intercept": 0.1,
     "Temp_Lift": 0.02,
+    "Delta_Temp_Lift": 0.0,
     "Total_Thermal_Load": -0.5,
     "Chiller_Command": 1.0
   },
   "_meta": {
-    "source": "hand-authored synthetic ground truth, not fit from real data",
-    "note": "plausible orders of magnitude only -- see fit_synthetic_models.py for a version refit from the seeded synthetic history"
+    "source": "hand-authored synthetic ground truth, not fit from real data"
   }
 }

@@ -1,8 +1,12 @@
 """
 Synthetic drop-in replacement for the private repo's real vendor PLC client.
-Same 3-method contract control_writer.py actually calls
-(`set_supply_temp`, `set_fan_speed`, `reset_room_setpoints`), so
-control_writer.py needs zero changes.
+Same 3-method contract control_writer.py's cooling path calls
+(`set_supply_temp`, `set_fan_speed`, `reset_room_setpoints`), plus a fourth,
+`set_battery_power`, for the joint cooling+PV+battery MPC's battery command
+-- battery actuation isn't wired in the private repo yet (run_battery_mpc.py's
+own docstring: "It does NOT actuate ... the caller wires the actual battery
+write, per request"), so this fills that documented gap with the obvious
+implementation for a self-contained demo rather than leaving it a no-op.
 
 There's no real hardware here, so instead of a network client this binds to
 a live `SyntheticBuilding` instance (see emulators/synthetic_building/plant.py)
@@ -47,6 +51,12 @@ class PLC_API:
         if _bound_building is not None:
             mpc_room = f"room_{room[1:]}"  # "R1" -> "room_1"
             _bound_building.set_fan_speed(mpc_room, speed)
+
+    def set_battery_power(self, power_kw: float, building: str = "demo") -> None:
+        """power_kw > 0 discharges, < 0 charges (matches gurobipy_mpc.py's
+        Battery_Power_kW convention)."""
+        if _bound_building is not None:
+            _bound_building.set_battery_power(float(power_kw))
 
     def reset_room_setpoints(self, setpoint: float) -> None:
         """

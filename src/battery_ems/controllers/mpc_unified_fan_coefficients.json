@@ -1,9 +1,9 @@
 {
-  "room_1": {"unified_slope_kW_per_C": -0.18},
-  "room_2": {"unified_slope_kW_per_C": -0.18},
-  "room_3": {"unified_slope_kW_per_C": -0.22},
-  "room_4": {"unified_slope_kW_per_C": -0.28},
-  "room_5": {"unified_slope_kW_per_C": -0.32},
+  "room_1": {"unified_slope_W_per_C": -180.0, "unified_slope_kW_per_C": -0.18},
+  "room_2": {"unified_slope_W_per_C": -180.0, "unified_slope_kW_per_C": -0.18},
+  "room_3": {"unified_slope_W_per_C": -220.0, "unified_slope_kW_per_C": -0.22},
+  "room_4": {"unified_slope_W_per_C": -280.0, "unified_slope_kW_per_C": -0.28},
+  "room_5": {"unified_slope_W_per_C": -320.0, "unified_slope_kW_per_C": -0.32},
   "_meta": {
     "source": "hand-authored synthetic ground truth, not fit from real data"
   }

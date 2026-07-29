@@ -52,7 +52,9 @@ class ControlWriter:
         still gets the full 3x-retry within this step.
 
         Args:
-            optimal_action: {'Chiller_Command': 0|1, 'Fan_Commands': {'room_1': 0|1, ...}}
+            optimal_action: {'Chiller_Command': 0|1, 'Fan_Commands': {'room_1': 0|1, ...},
+                              'Battery_Power_kW': float}  # optional -- only the joint
+                              cooling+PV+battery MPC includes this key
 
         Returns:
             Record of what was written (included in the step log).
@@ -62,6 +64,7 @@ class ControlWriter:
         setpoint = CHILLER_ON_SETPOINT if chiller_on else CHILLER_OFF_SETPOINT
         fan_written = {r: bool(v) for r, v in optimal_action["Fan_Commands"].items()}
         fan_speed = {r: ("normal" if is_on else "off") for r, is_on in fan_written.items()}
+        battery_power_kw = optimal_action.get("Battery_Power_kW")
 
         fan_changed = {r: self._last_written.get(f"fan_{r}") != speed for r, speed in fan_speed.items()}
 
@@ -78,6 +81,10 @@ class ControlWriter:
                 plc_room = ROOM_MAPPING[mpc_room]
                 self.plc.set_fan_speed(fan_speed[mpc_room], room=plc_room, building=self.building)
                 log.info(f"  Fan {mpc_room} ({plc_room}): {'ON' if is_on else 'OFF'}")
+            if battery_power_kw is not None:
+                self.plc.set_battery_power(battery_power_kw, building=self.building)
+                log.info(f"  Battery: {abs(battery_power_kw):.2f} kW "
+                         f"{'discharge' if battery_power_kw >= 0 else 'charge'}")
             if attempt < 2:
                 time.sleep(RETRY_DELAY_S)
 
@@ -87,6 +94,8 @@ class ControlWriter:
         written["chiller_on"] = chiller_on
         written["supply_setpoint_written"] = setpoint
         written["fan_commands"] = fan_written
+        if battery_power_kw is not None:
+            written["battery_power_kw"] = battery_power_kw
         return written
 
     def write_hard_fallback(self) -> dict:

@@ -73,3 +73,8 @@ demo_Q_R5:
   type: single
   signal: room_5_Q_fan_w
   output_column: Pwr
+
+demo_battery_soc:
+  type: single
+  signal: battery_soc_kwh
+  output_column: soc_kwh

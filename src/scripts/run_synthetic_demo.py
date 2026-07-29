@@ -31,9 +31,10 @@ from battery_ems.interfaces.influx import EnergyDataInterface  # noqa: E402
 from battery_ems.interfaces.PLC_API import PLC_API  # noqa: E402
 from battery_ems.mpc.control_writer import ControlWriter  # noqa: E402
 from battery_ems.mpc.forecast_provider import ForecastProvider  # noqa: E402
+from battery_ems.mpc.pv_load_forecast import PVLoadForecastProvider  # noqa: E402
 from battery_ems.mpc.rc_observer import RCObserver  # noqa: E402
 from battery_ems.mpc.run_mpc import (  # noqa: E402
-    HORIZON_STEPS, LOG_FILE, STATE_FILE, load_mpc_config, run_one_step,
+    HOLDOVER_BLOCKS, HORIZON_STEPS, LOG_FILE, STATE_FILE, load_mpc_config, run_one_step,
 )
 from battery_ems.mpc.state_reader import StateReader  # noqa: E402
 from battery_ems.mpc.step_logger import StepLogger  # noqa: E402
@@ -70,9 +71,10 @@ def main(cycles: int) -> None:
     print("Loading MPC config...")
     config = load_mpc_config()
     rc_models = config["rc_models"]
+    battery_capacity_kwh = config["battery_physics"]["capacity_kwh"]
 
-    print("Building parametric Gurobi model (once)...")
-    m, params, vars_dict = build_parametric_mpc(HORIZON_STEPS, config)
+    print("Building parametric joint MPC model (once)...")
+    m, params, vars_dict, binary_blocks = build_parametric_mpc(HORIZON_STEPS, config)
 
     shared_db = EnergyDataInterface(store=store)
     state_reader = StateReader(meter_config_file="meters_demo.yaml", db=shared_db)
@@ -81,6 +83,7 @@ def main(cycles: int) -> None:
         observer.warmup_from_history(state_reader)
 
     forecast_provider = ForecastProvider()
+    pv_load_forecast_provider = PVLoadForecastProvider()
     logger = StepLogger(log_file=LOG_FILE)
     fallback_state = {"consecutive_failures": 0, "last_plan": None, "predicted_next": None}
 
@@ -101,14 +104,16 @@ def main(cycles: int) -> None:
 
         print(f"\n--- Cycle {cycle + 1}/{cycles} | sim time {building.time.isoformat()} "
               f"| room_1={building.rooms['room_1'].T_room:.2f}°C | "
-              f"chiller={'ON' if building.chiller_on else 'OFF'} ---")
+              f"chiller={'ON' if building.chiller_on else 'OFF'} | "
+              f"battery_soc={building.battery.soc_kwh:.2f}/{battery_capacity_kwh:.1f}kWh ---")
         T_room1_history.append(building.rooms["room_1"].T_room)
 
         run_one_step(
             m, params, vars_dict,
-            state_reader, observer, forecast_provider,
+            state_reader, observer, forecast_provider, pv_load_forecast_provider,
             control_writer, logger, rc_models,
-            fallback_state, dry_run=False,
+            fallback_state, battery_capacity_kwh, binary_blocks, HOLDOVER_BLOCKS,
+            dry_run=False,
         )
 
     store.save()

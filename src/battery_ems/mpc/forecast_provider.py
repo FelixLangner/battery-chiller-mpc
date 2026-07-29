@@ -19,6 +19,14 @@ _OFF_PEAK_EUR_KWH = 0.22
 _PEAK_EUR_KWH = 0.38
 _PEAK_HOURS = range(17, 21)  # 17:00-21:00 local
 
+# Synthetic feed-in/sell price: always below buy (grid arbitrage isn't free
+# money), with a midday dip (10:00-16:00) when PV oversupply would plausibly
+# depress wholesale prices -- gives the battery MPC a genuine economic
+# incentive shape (charge cheap/midday, discharge into the evening peak).
+_SELL_EUR_KWH = 0.10
+_SELL_MIDDAY_DIP_EUR_KWH = 0.04
+_SELL_MIDDAY_HOURS = range(10, 16)
+
 
 class ForecastProvider:
     """
@@ -41,6 +49,7 @@ class ForecastProvider:
             "T_amb": Ta,
             "Solar": Solar,
             "tariffs": self._tariff_schedule(horizon_steps, now),
+            "sell_tariffs": self._sell_tariff_schedule(horizon_steps, now),
             "T_min": T_min,
             "T_max": T_max,
             "T_sup_min": [5.0] * horizon_steps,
@@ -113,4 +122,12 @@ class ForecastProvider:
         for i in range(horizon_steps):
             step_local = (now + timedelta(minutes=i * STEP_MINUTES)).astimezone(_BERLIN)
             tariffs.append(_PEAK_EUR_KWH if step_local.hour in _PEAK_HOURS else _OFF_PEAK_EUR_KWH)
+        return tariffs
+
+    @staticmethod
+    def _sell_tariff_schedule(horizon_steps: int, now: datetime) -> list:
+        tariffs = []
+        for i in range(horizon_steps):
+            step_local = (now + timedelta(minutes=i * STEP_MINUTES)).astimezone(_BERLIN)
+            tariffs.append(_SELL_MIDDAY_DIP_EUR_KWH if step_local.hour in _SELL_MIDDAY_HOURS else _SELL_EUR_KWH)
         return tariffs
