@@ -1,0 +1,75 @@
+# Synthetic meter config for the digital-twin demo building. Every meter
+# here is backed by the in-process TimeSeriesStore (see
+# battery_ems.emulators.synthetic_building.store) -- there is nothing site-
+# specific or sensitive here, safe to commit (unlike the private repo's real
+# meters*.yaml, which are gitignored).
+
+weather_station_temp:
+  type: single
+  signal: EnvTmp
+  output_column: EnvTmp
+
+weather_station_solar:
+  type: single
+  signal: GlobIrradHoriz
+  output_column: GlobIrradHoriz
+
+demo_Q_AC:
+  type: single
+  signal: T_sup
+  output_column: TmpSup
+
+demo_chiller:
+  type: chiller
+  sup_tmp_signal: T_sup
+  cmp_hz_signal: chiller_cmp_hz
+
+demo_temperature_R1:
+  type: single
+  signal: room_1_temperature
+  output_column: temperature
+
+demo_temperature_R2:
+  type: single
+  signal: room_2_temperature
+  output_column: temperature
+
+demo_temperature_R3:
+  type: single
+  signal: room_3_temperature
+  output_column: temperature
+
+demo_temperature_R4:
+  type: single
+  signal: room_4_temperature
+  output_column: temperature
+
+demo_temperature_R5:
+  type: single
+  signal: room_5_temperature
+  output_column: temperature
+
+demo_Q_R1:
+  type: single
+  signal: room_1_Q_fan_w
+  output_column: Pwr
+
+demo_Q_R2:
+  type: single
+  signal: room_2_Q_fan_w
+  output_column: Pwr
+
+demo_Q_R3:
+  type: single
+  signal: room_3_Q_fan_w
+  output_column: Pwr
+
+demo_Q_R4:
+  type: single
+  signal: room_4_Q_fan_w
+  output_column: Pwr
+
+demo_Q_R5:
+  type: single
+  signal: room_5_Q_fan_w
+  output_column: Pwr

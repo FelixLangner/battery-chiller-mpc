@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "battery_ems_demo"
+version = "0.1.0"
+description = "Synthetic digital-twin demo of an MPC-based building cooling/battery/PV energy management system"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",             # Time-series data handling
+    "pyarrow",             # Parquet backing for the synthetic time-series store
+    "scipy",               # Model identification (fit_synthetic_models.py)
+    "gurobipy",            # MPC solver
+    "pytest",              # Tests
+    "ruff",                # Linting and formatting
+    "matplotlib",          # Visualization
+    "pyyaml",              # Meter config
+    "holidays",            # Public holidays in the comfort/load schedule
+    "pytz",                # Time zone handling
+    "wetterdienst",        # Live DWD weather forecast (kept live, free/keyless)
+    "pvlib",                # Clear-sky irradiance model for the synthetic PV generator
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests that require external services (skip in CI/CD)"
+]

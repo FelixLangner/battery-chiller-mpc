@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+venv/
+env/
+
+# PyCharm / IDE
+.idea/
+
+# Testing and formatting tools
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Installation
+battery_ems_demo.egg-info/
+
+# Generated synthetic data / figures / runtime state (regenerate via
+# scripts/, not committed -- mirrors the private repo's own treatment of
+# live MPC runtime state)
+figures/*.png
+data/synthetic_store.parquet
+data/mpc_logs/
+data/mpc_state/
+!data/.gitkeep
+
+# Local instructions
+CLAUDE.md
