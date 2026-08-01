@@ -53,8 +53,11 @@ $$
 >
 >2. Continuous approximation: For the first 2 hours of the prediction horizon, the MPC considers the full MILP. This regime is called the "binary head". Afterward,for hours 2-24, the binary variables are relaxed to continuous variables in [0,1]. This is called the "continuous tail". Note, that the "tail" is just an approximation and never gets executed due to the receding horizon approach.
 
-$Z^{\mathrm{chiller}}_k$ (chiller on/off) and $Z^{\mathrm{fan}}_{r,k}$
-(per-room fan on/off) are:
+$$
+Z^{\mathrm{chiller}}_k \ \text{(chiller on/off)} \qquad Z^{\mathrm{fan}}_{r,k} \ \text{(per-room fan on/off)}
+$$
+
+are:
 - **strictly binary** for the first $K_{\mathrm{bin}} = 8$ blocks (2h) — the
   "head". This is the only part of every solve that is ever executed.
 - **relaxed to $[0,1]$ continuous** for $k \ge K_{\mathrm{bin}}$ — the
@@ -71,7 +74,7 @@ specifically because of this:
   tail.
 - $\dot{Q}^{\mathrm{fan}}$ (heat delivered to a room) uses big-M to linearize
   $Z^{\mathrm{fan}} \cdot \gamma_r \cdot (T^{\mathrm{room}} - T^{\mathrm{sup}})$ in
-  the head. For the tail: ($\dot{Q}^{\mathrm{fan}} \ge \gamma_r(T^{\mathrm{room}} - T^{\mathrm{sup}})$.
+  the head. For the tail: $\dot{Q}^{\mathrm{fan}} \ge \gamma_r(T^{\mathrm{room}} - T^{\mathrm{sup}})$.
 
 ### Objective
 
@@ -79,7 +82,7 @@ $$
 \min \quad
 \underbrace{\sum_{t=0}^{H-1} \Big( P^{\mathrm{grid,imp}}_t\, c^{\mathrm{buy}}_t - P^{\mathrm{grid,exp}}_t\, c^{\mathrm{sell}}_t \Big)\, \Delta t}_{\text{grid cost (chiller + fans + battery net of PV)}}
 \;+\;
-\underbrace{\sum_{r\in\mathcal{R}}\sum_{t=0}^{H-1} w^{T}_r\, s^{T}_{r,t} \;+\; \sum_{t=0}^{H-1} w^{\mathrm{Tsup}}\, s^{\mathrm{Tsup}}_t \;+\; \sum_{r\in\mathcal{R}}\sum_{t\,:\,k(t)\,\ge\,K_{\mathrm{bin}}} w^{\mathrm{fan}}_r\, s^{\mathrm{fan}}_{r,t}}_{\text{comfort \& physical-floor slack penalties}}
+\underbrace{\sum_{r\in\mathcal{R}}\sum_{t=0}^{H-1} w^{T}_r\, s^{T}_{r,t} \;+\; \sum_{t=0}^{H-1} w^{\mathrm{Tsup}}\, s^{\mathrm{Tsup}}_t \;+\; \sum_{r\in\mathcal{R}}\sum_{t\,:\,k(t)\,\ge\,K_{\mathrm{bin}}} w^{\mathrm{fan}}_r\, s^{\mathrm{fan}}_{r,t}}_{\text{comfort and physical-floor slack penalties}}
 $$
 
 where $\Delta t = 5/60$ h and $s^{(\cdot)}$ are soft-penalty slacks (a
@@ -100,7 +103,7 @@ $$
 $$
 T^{\mathrm{sup}}_{t+1} =
 \begin{cases}
-\theta^{\mathrm{on}}, & Z^{\mathrm{chiller}}_k = 1 \\[6pt]
+\theta^{\mathrm{on}}, & Z^{\mathrm{chiller}}_k = 1 \\
 \theta^{\mathrm{off}} + \theta^{\mathrm{off}}_{T}T^{\mathrm{sup}}_t + \theta^{\mathrm{off}}_{E}T^{\mathrm{amb}}_t + \theta^{\mathrm{off}}_{Q}\sum_{r\in\mathcal{R}} \dot Q^{\mathrm{fan}}_{r,t}, & Z^{\mathrm{chiller}}_k = 0
 \end{cases}
 \qquad \text{(head)}
