@@ -11,14 +11,6 @@ coefficients. Instead, every "measurement" is created by a digital twin
 (`emulators/synthetic_building/`) built specifically for this demo. 
 The control code itself (the MPC formulation, the Kalman
 observer, the control loop, the fallback logic) is real as in the deployed controller.
-The building and its data are synthetic, with one deliberate exception: the
-electricity buy tariff (`data/real_tariff_2026-06-19.json`) is a real German
-day-ahead wholesale price (via awattar.de) for one representative day, plus
-real network-fee/tax/VAT schedule -- public market data, not building- or
-person-identifying, included so the MPC's cost-vs-comfort trade-off runs
-against a genuinely realistic price signal instead of a flat synthetic
-curve. See `mpc/forecast_provider.py`'s `_REAL_TARIFF_BY_HOUR` for how it's
-used; the sell/feed-in tariff stays synthetic.
 
 ## System overview
 
