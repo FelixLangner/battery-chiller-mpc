@@ -1,9 +1,7 @@
 """
-Bootstraps the synthetic TimeSeriesStore with plausible "historical" data by
-running SyntheticBuilding forward under a simple reactive bang-bang
-controller (substitutes for the real repo's historical sensor CSVs, which
-obviously can't be ported here). Ends at real wall-clock "now" so
-run_synthetic_demo.py's fast-forward loop can pick up immediately after.
+Creates synthetic TimeSeriesStore with plausible "historical" data by
+running SyntheticBuilding forward under a bang-bang
+controller.
 
 Usage:
     python -m scripts.seed_synthetic_history [--days N]
@@ -16,8 +14,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 
-from battery_ems.emulators.synthetic_building.plant import SyntheticBuilding  # noqa: E402
-from battery_ems.emulators.synthetic_building.store import TimeSeriesStore  # noqa: E402
+from battery_ems.emulators.synthetic_building.plant import (
+    SyntheticBuilding,
+)
+from battery_ems.emulators.synthetic_building.store import TimeSeriesStore
 
 STORE_PATH = REPO / "data" / "synthetic_store.parquet"
 T_TARGET = 23.0

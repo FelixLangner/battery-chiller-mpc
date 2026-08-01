@@ -3,7 +3,9 @@ import pandas as pd
 import pytest
 
 from battery_ems.emulators.synthetic_building.rc_plant import (
-    ROOM_PARAMS, RCPlant, discretize,
+    ROOM_PARAMS,
+    RCPlant,
+    discretize,
 )
 from battery_ems.emulators.synthetic_building.store import TimeSeriesStore
 
@@ -20,10 +22,9 @@ def test_discretize_is_stable_for_every_room():
 def test_discretize_shapes_match_deployed_json_convention():
     model = discretize(ROOM_PARAMS["room_1"])
     assert len(model["A"]) == 2 and len(model["A"][0]) == 2
-    assert len(model["B"]) == 2 and len(model["B"][0]) == 4
-    assert model["B"][0][3] == 0.0 and model["B"][1][3] == 0.0  # unused 4th input
+    assert len(model["B"]) == 2 and len(model["B"][0]) == 3  # [T_amb, Q_fan, Solar]
     assert model["C"] == pytest.approx([1.0, 0.0])
-    assert model["D"] == [0.0, 0.0, 0.0, 0.0]
+    assert model["D"] == [0.0, 0.0, 0.0]
 
 
 def test_plant_cools_when_fan_active():

@@ -1,4 +1,3 @@
-import time
 import logging
 
 log = logging.getLogger(__name__)
@@ -18,12 +17,6 @@ CHILLER_ON_SETPOINT = 8   # °C
 CHILLER_OFF_SETPOINT = 20  # °C
 
 FALLBACK_ROOM_SETPOINT_KEY = "fallback_room_setpoint"
-
-# In the private repo this is a real 10s inter-retry wait against physical
-# hardware. Against the synthetic plant there's nothing to wait for, so the
-# demo can shrink this via the PLC_WRITE_RETRY_DELAY_S env var if desired --
-# see run_synthetic_demo.py for the fast-forward entrypoint.
-RETRY_DELAY_S = 10
 
 
 class ControlWriter:
@@ -48,8 +41,7 @@ class ControlWriter:
         """
         Execute control commands for one MPC step. Fan speed is deduplicated
         across steps only: a room whose fan target is unchanged from the
-        last step is not re-sent this step; a room whose target DID change
-        still gets the full 3x-retry within this step.
+        last step is not re-sent this step
 
         Args:
             optimal_action: {'Chiller_Command': 0|1, 'Fan_Commands': {'room_1': 0|1, ...},
@@ -85,8 +77,6 @@ class ControlWriter:
                 self.plc.set_battery_power(battery_power_kw, building=self.building)
                 log.info(f"  Battery: {abs(battery_power_kw):.2f} kW "
                          f"{'discharge' if battery_power_kw >= 0 else 'charge'}")
-            if attempt < 2:
-                time.sleep(RETRY_DELAY_S)
 
         for mpc_room, speed in fan_speed.items():
             self._last_written[f"fan_{mpc_room}"] = speed

@@ -1,19 +1,10 @@
 from unittest.mock import MagicMock
 
-import pytest
-
 from battery_ems.mpc.control_writer import (
     CHILLER_OFF_SETPOINT,
     CHILLER_ON_SETPOINT,
     ControlWriter,
 )
-
-
-@pytest.fixture(autouse=True)
-def no_sleep(monkeypatch):
-    # write() sleeps between its 3 attempts every step -- stub it out so
-    # these tests don't take real wall-clock time.
-    monkeypatch.setattr("battery_ems.mpc.control_writer.time.sleep", lambda s: None)
 
 
 def _action(chiller_on: bool, **fan_on: bool) -> dict:

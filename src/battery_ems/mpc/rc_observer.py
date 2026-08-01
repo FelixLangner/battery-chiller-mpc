@@ -1,9 +1,10 @@
 import json
 import logging
 import math
-import numpy as np
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
+
+import numpy as np
 
 log = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ class RCObserver:
 
     where:
         y      — measured room temperature (°C) from the synthetic store
-        u_prev — [T_amb, Q_fan, Solar, 0.0] inputs applied at the previous step
+        u_prev — [T_amb, Q_fan, Solar] inputs applied at the previous step
         K      — observer gain vector, shape (n_states,), loaded from mpc_rc_models.json
         D      — feedthrough matrix, shape (1, n_inputs), loaded from mpc_rc_models.json
 
@@ -54,7 +55,7 @@ class RCObserver:
     def update(
         self,
         y_measured: dict,    # {room_id: list[float]}  3 buckets oldest→newest, NaN where missing
-        u_prev: dict,        # {room_id: list}    [T_amb, Q_fan, Solar, 0.0] at previous step
+        u_prev: dict,        # {room_id: list}    [T_amb, Q_fan, Solar] at previous step
         T_amb: float,
         T_sup: float,
         n_substeps: int = 3,
@@ -111,7 +112,7 @@ class RCObserver:
         stored = self._state.get("u_prev")
         if stored and all(r in stored for r in rooms):
             return stored
-        return {r: [T_amb_fallback, 0.0, 0.0, 0.0] for r in rooms}
+        return {r: [T_amb_fallback, 0.0, 0.0] for r in rooms}
 
     def warmup_from_history(self, state_reader, disturbance_threshold: float = 0.4) -> None:
         """
@@ -177,7 +178,7 @@ class RCObserver:
                 else:
                     last_Solar = Solar_t
 
-                u = np.array([T_amb_t, Q_t, Solar_t, 0.0])
+                u = np.array([T_amb_t, Q_t, Solar_t])
 
                 y_t = y_arr[t]
                 if not np.isnan(y_t):

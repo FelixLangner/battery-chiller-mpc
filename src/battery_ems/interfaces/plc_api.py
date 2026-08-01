@@ -1,24 +1,5 @@
 """
-Synthetic drop-in replacement for the private repo's real vendor PLC client.
-Same 3-method contract control_writer.py's cooling path calls
-(`set_supply_temp`, `set_fan_speed`, `reset_room_setpoints`), plus a fourth,
-`set_battery_power`, for the joint cooling+PV+battery MPC's battery command
--- battery actuation isn't wired in the private repo yet (run_battery_mpc.py's
-own docstring: "It does NOT actuate ... the caller wires the actual battery
-write, per request"), so this fills that documented gap with the obvious
-implementation for a self-contained demo rather than leaving it a no-op.
-
-There's no real hardware here, so instead of a network client this binds to
-a live `SyntheticBuilding` instance (see emulators/synthetic_building/plant.py)
-via a small module-level bind, set once by whichever entrypoint owns the
-simulated clock (run_synthetic_demo.py) before starting the control loop --
-mirrors how, in the private repo, PLC_API and EnergyDataInterface are two
-independent connections that happen to reflect the same physical building;
-here they're two independent objects that happen to reflect the same
-SyntheticBuilding instance.
-
-For `run_mpc.py --dry-run`, PLC_API is imported but never instantiated or
-bound -- the dry-run path never calls it.
+Mirrors the PLC connection API, but instead of writing to a real PLC, it writes to a SyntheticBuilding instance."
 """
 import logging
 
@@ -35,7 +16,7 @@ def bind_building(building) -> None:
 
 
 class PLC_API:
-    """Synthetic stand-in for the real vendor PLC client."""
+    """Synthetic stand-in for the real PLC client."""
 
     def __init__(self, buildings: list[str] | None = None):
         self.buildings = buildings or []

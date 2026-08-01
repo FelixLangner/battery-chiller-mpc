@@ -1,29 +1,21 @@
 import warnings
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import dateutil
 import pandas as pd
 from wetterdienst.provider.dwd.mosmix.api import DwdMosmixRequest, DwdMosmixStationGroup
-from wetterdienst.provider.dwd.observation import DwdObservationRequest
 from wetterdienst.settings import Settings
 
 _PARAM_RADIATION = "radiation_global"          # kJ/m² cumulative over last 1h
 _PARAM_TEMPERATURE = "temperature_air_mean_2m"  # °C (wetterdienst converts from K)
 
-# Any DWD MOSMIX ("small") forecast station works here -- pick whichever is
+# Any DWD MOSMIX ("small") forecast station works here. Pick whichever is
 # nearest to the location you want to demo. Default below is an arbitrary
-# public station, not tied to any real building.
-DEFAULT_MOSMIX_STATION = "10731"
-# Paired historical-observation station for get_historical_weather() (used
-# by the optional Chronos PV/load forecasting path, not the cooling MPC).
-DEFAULT_OBSERVATION_STATION = "04177"
+# public station (Berlin-Tempelhof), not tied to any real building.
+DEFAULT_MOSMIX_STATION = "10382"
 
 # wetterdienst's "energy_per_area" unit type defaults to J/cm² (the first entry in
-# its internal unit list), NOT the kJ/m² that DWD documents for Rad1h -- silently
-# returning values 10x smaller than the conversion below assumes. Confirmed against
-# the official DWD MOSMIX_L KML vs wetterdienst's default output for the same
-# station/hour. Pin the target unit explicitly rather than relying on wetterdienst's
-# default, which could change.
+# its internal unit list), NOT the kJ/m² that DWD documents for Rad1
 _SETTINGS = Settings(ts_unit_targets={"energy_per_area": "kilojoule_per_square_meter"})
 
 
@@ -36,9 +28,12 @@ def get_forecast_weather(
         air_temperature_unit="°C",
         mosmix_station_index=DEFAULT_MOSMIX_STATION):
 
-    if end_timestamp > datetime.utcnow() + timedelta(days=9, hours=23):
+    # naive-UTC, matching start_timestamp/end_timestamp's convention (see the
+    # .replace(tzinfo=...) below -- callers pass naive UTC wall-clock values)
+    utc_now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if end_timestamp > utc_now + timedelta(days=9, hours=23):
         warnings.warn("Warning: End too far in future")
-    if start_timestamp < datetime.utcnow() - timedelta(hours=1):
+    if start_timestamp < utc_now - timedelta(hours=1):
         warnings.warn("Warning: Start too far in past")
     if end_timestamp < start_timestamp:
         warnings.warn("Warning: End before start")
@@ -85,51 +80,8 @@ def get_forecast_weather(
     return weather_frame
 
 
-def get_historical_weather(
-        start_timestamp: datetime,
-        end_timestamp: datetime,
-        resample_freq: str = "15min",
-        station_id: str = DEFAULT_OBSERVATION_STATION,
-) -> pd.DataFrame:
-    """
-    Past (measured, not forecast) global radiation (W/m²) and air temperature
-    (°C) from DWD's observation network, resampled to a regular
-    `resample_freq` grid. Returns columns ["DWD_GlobIrradHoriz", "DWD_EnvTmp"].
-    """
-    settings = Settings(ts_unit_targets={"energy_per_area": "kilojoule_per_square_meter"})
-    request = DwdObservationRequest(
-        parameters=[
-            ("minute_10", "solar", _PARAM_RADIATION),
-            ("hourly", "temperature_air", _PARAM_TEMPERATURE),
-        ],
-        start_date=start_timestamp,
-        end_date=end_timestamp,
-        settings=settings,
-    ).filter_by_station_id(station_id)
-
-    pdf = request.values.all().df.to_pandas()
-    pdf["date"] = pd.to_datetime(pdf["date"], utc=True)
-
-    rad = pdf[pdf["parameter"] == _PARAM_RADIATION].set_index("date")["value"]
-    tmp = pdf[pdf["parameter"] == _PARAM_TEMPERATURE].set_index("date")["value"]
-
-    # kJ/m² per 10-min interval -> W/m² average power over that interval.
-    rad_w = (rad * 1000.0 / 600.0).rename("DWD_GlobIrradHoriz")
-    tmp_c = tmp.rename("DWD_EnvTmp")
-
-    weather = pd.concat([rad_w, tmp_c], axis=1)
-    weather = weather.resample(resample_freq).interpolate(method="linear")
-    utc_start = start_timestamp if start_timestamp.tzinfo else start_timestamp.replace(tzinfo=dateutil.tz.UTC)
-    utc_end = end_timestamp if end_timestamp.tzinfo else end_timestamp.replace(tzinfo=dateutil.tz.UTC)
-    utc_start = pd.Timestamp(utc_start).tz_convert("UTC")
-    utc_end = pd.Timestamp(utc_end).tz_convert("UTC")
-    weather = weather.loc[utc_start:utc_end]
-    weather["DWD_GlobIrradHoriz"] = weather["DWD_GlobIrradHoriz"].clip(lower=0.0)
-    return weather
-
-
 if __name__ == "__main__":
-    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    now = datetime.now(timezone.utc).replace(tzinfo=None, minute=0, second=0, microsecond=0)
     demo = get_forecast_weather(
         start_timestamp=now,
         end_timestamp=now + timedelta(hours=10),

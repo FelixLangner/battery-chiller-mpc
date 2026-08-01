@@ -1,21 +1,8 @@
 """
-Ground-truth 2-state (TiTe) RC thermal plant for one room: ONLY the bare
-discrete-time propagation used by the real `mpc_rc_models.json` state-space
-format (A, B, C, D), adapted from the propagation math in
-`battery_ems.mpc.rc_observer.RCObserver` (x = A @ x + B @ u) but stripped of
-its Kalman-correction/persistence machinery, which is observer-specific, not
-plant-specific.
+Ground-truth 2-state (TiTe) RC thermal plant for one room.
+NOT fit from real data. Discretized via zero-order hold at the 5-min physics step
 
-Hand-authored, plausible, stable per-room parameters -- NOT fit from real
-data. Discretized via zero-order hold at the 5-min physics step, matching
-`gurobipy_mpc.build_parametric_mpc`'s BLOCK_SIZE=3 (15-min control) / 5-min
-physics resolution.
-
-State x = [T_i (air), T_e (envelope)]. Input u = [T_amb, Q_fan_kW, Solar_kW_m2, 0.0]
--- the 4th input is always literally 0.0 in the deployed MPC constraint
-(`gurobipy_mpc.py`'s `u_t = [..., 0.0]`), so B's 4th column is unused by
-construction; kept as an all-zero column only to match the JSON shape the
-solver code expects.
+State x = [T_i (air), T_e (envelope)]. Input u = [T_amb, Q_fan_kW, Solar_kW_m2].
 """
 from dataclasses import dataclass
 
@@ -53,15 +40,12 @@ def discretize(p: RCParams, dt_seconds: float = DT_SECONDS) -> dict:
     Cc = np.array([[1.0, 0.0]])
     Dc = np.zeros((1, 3))
     dt_hours = dt_seconds / 3600.0
-    Ad, Bd, Cd, Dd, _ = cont2discrete((Ac, Bc, Cc, Dc), dt=dt_hours, method="zoh")
-    # Append the unused 4th input column (always multiplied by a literal 0.0
-    # in gurobipy_mpc.py) so the shape matches the real JSON's B (n x 4).
-    Bd_full = np.hstack([Bd, np.zeros((Bd.shape[0], 1))])
+    Ad, Bd, Cd, _, _ = cont2discrete((Ac, Bc, Cc, Dc), dt=dt_hours, method="zoh")
     return {
         "A": Ad.tolist(),
-        "B": Bd_full.tolist(),
+        "B": Bd.tolist(),
         "C": Cd.flatten().tolist(),
-        "D": [0.0, 0.0, 0.0, 0.0],
+        "D": [0.0, 0.0, 0.0],
         "structure": "TiTe_synthetic",
     }
 
@@ -71,17 +55,16 @@ class RCPlant:
 
     def __init__(self, params: RCParams, x0: tuple[float, float] = (23.0, 23.0)):
         self.params = params
-        Ac, Bc = continuous_matrices(params)
         model = discretize(params)
         self.A = np.array(model["A"])
-        self.B3 = np.array(model["B"])[:, :3]  # drop the always-zero 4th column for simulation
+        self.B = np.array(model["B"])
         self.C = np.array(model["C"])
         self.x = np.array(x0, dtype=float)
 
     def step(self, T_amb: float, Q_fan_kw: float, Solar_kw_m2: float) -> float:
         """Advance one 5-min step; Q_fan_kw is <=0 (cooling removes heat from the room air)."""
         u = np.array([T_amb, Q_fan_kw, Solar_kw_m2])
-        self.x = self.A @ self.x + self.B3 @ u
+        self.x = self.A @ self.x + self.B @ u
         return float(self.C @ self.x)
 
     @property

@@ -1,23 +1,47 @@
+import json
 import logging
 import math
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from battery_ems.mpc.forecasts import Forecasting
 
 _BERLIN = ZoneInfo("Europe/Berlin")
+_ROOT = Path(__file__).parent.parent.parent.parent  # mpc/ -> battery_ems/ -> src/ -> project root
 
 log = logging.getLogger(__name__)
+
+
+def _clock() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def set_clock(fn) -> None:
+    """Override wall-clock time for demo testing, so a fast-forwarded
+    SyntheticBuilding's simulated clock -- not real wall-clock time -- drives
+    which comfort band (office-hours vs. night/weekend) and tariff period
+    apply. Same pattern as state_reader.py/influx.py's set_clock(); without
+    it, get()'s comfort/tariff scheduling stays pinned to whenever the script
+    happened to actually run, never advancing with simulated time."""
+    global _clock
+    _clock = fn
 
 STEP_MINUTES = 5
 CACHE_TTL_MINUTES = 55  # DWD MOSMIX updates hourly; re-fetch just before the hour
 
-# Synthetic day-ahead-style tariff: cheap overnight, an evening peak -- a
-# plausible shape, not derived from any real market data (the private repo's
-# real awattar-derived tariff file is intentionally not ported here).
-_OFF_PEAK_EUR_KWH = 0.22
-_PEAK_EUR_KWH = 0.38
-_PEAK_HOURS = range(17, 21)  # 17:00-21:00 local
+# Real buy tariff -- unlike the rest of this repo, this one genuinely is real
+# data: awattar.de's real German day-ahead wholesale price for 2026-06-19
+# (a single real day picked as representative, not a multi-day average) plus
+# real network-fee/tax/VAT schedule, hour-of-day indexed. Not building- or
+# person-identifying (a public day-ahead market price), but a deliberate,
+# explicit exception to this repo's usual synthetic-only data -- see
+# README.md's "Synthetic data" section. Deployed hourly buy price for hour h
+# is _REAL_TARIFF_BY_HOUR[h]; see the file's own "_meta" key for the
+# wholesale/fee/VAT breakdown this was derived from.
+_TARIFF_FILE = _ROOT / "data" / "real_tariff_2026-06-19.json"
+with open(_TARIFF_FILE) as _f:
+    _REAL_TARIFF_BY_HOUR = {int(h): v for h, v in json.load(_f).items() if h != "_meta"}
 
 # Synthetic feed-in/sell price: always below buy (grid arbitrage isn't free
 # money), with a midday dip (10:00-16:00) when PV oversupply would plausibly
@@ -31,9 +55,9 @@ _SELL_MIDDAY_HOURS = range(10, 16)
 class ForecastProvider:
     """
     Returns forecast arrays for the full MPC horizon. Weather (T_amb, Solar)
-    comes from the live, public DWD MOSMIX product (see forecasts.py/dwd.py)
-    -- kept live since it's free, keyless, and not specific to any real
-    building. Price is a synthetic diurnal curve (see module docstring).
+    comes from the live, public DWD MOSMIX product (see forecasts.py/dwd.py).
+    The buy tariff is real (see _REAL_TARIFF_BY_HOUR above); everything else
+    (sell tariff, comfort schedule) is synthetic.
     """
 
     def __init__(self):
@@ -42,7 +66,7 @@ class ForecastProvider:
 
     def get(self, horizon_steps: int, T_amb_current: float, rooms: list[str],
             mode_end: datetime | None = None) -> dict:
-        now = datetime.now(timezone.utc)
+        now = _clock()
         Ta, Solar = self._fetch(horizon_steps, now, T_amb_current)
         T_min, T_max = self._comfort_schedule(horizon_steps, now, rooms, mode_end=mode_end)
         return {
@@ -70,7 +94,7 @@ class ForecastProvider:
             self._cache = {"Ta": Ta_series, "qs": qs_series}
             self._cache_fetched_at = now
             log.info(f"DWD forecast fetched: {len(Ta_series)} steps at {STEP_MINUTES}-min resolution.")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- live DWD fetch failure must not crash the loop
             log.warning(f"DWD forecast failed ({exc}). Using {'cached' if self._cache else 'flat-persistence'} fallback.")
 
         return self._slice(horizon_steps, T_amb_fallback)
@@ -121,7 +145,7 @@ class ForecastProvider:
         tariffs = []
         for i in range(horizon_steps):
             step_local = (now + timedelta(minutes=i * STEP_MINUTES)).astimezone(_BERLIN)
-            tariffs.append(_PEAK_EUR_KWH if step_local.hour in _PEAK_HOURS else _OFF_PEAK_EUR_KWH)
+            tariffs.append(_REAL_TARIFF_BY_HOUR[step_local.hour])
         return tariffs
 
     @staticmethod

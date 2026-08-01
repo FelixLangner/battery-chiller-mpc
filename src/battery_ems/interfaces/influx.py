@@ -1,12 +1,5 @@
 """
-Synthetic drop-in replacement for the private repo's InfluxDB-backed
-`EnergyDataInterface`. Same public method signature
-(`get_meter_data(meter_config, start, end, resolution) -> DataFrame`), so
-every caller elsewhere in this codebase (state_reader.py, pv_load_reader.py)
-works completely unmodified. Backed by `TimeSeriesStore`
-(emulators/synthetic_building/store.py) instead of a live InfluxDB server --
-there is no real building here, so there's nothing to connect to and no
-`.env`/credentials needed.
+Replacement for the InfluxDB client.
 """
 import re
 from datetime import datetime, timedelta, timezone
@@ -21,10 +14,7 @@ DEFAULT_STORE_PATH = Path(__file__).parent.parent.parent.parent / "data" / "synt
 _DURATION_RE = re.compile(r"^-(\d+)(s|m|h|d)$")
 _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
-# Overridable by run_synthetic_demo.py so relative windows ("-8m", "now()")
-# resolve against a SyntheticBuilding's simulated clock during a
-# fast-forwarded run instead of real wall-clock time -- see the matching
-# hook in state_reader.py for why this matters.
+
 def _clock() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -51,8 +41,7 @@ def _resolve_time(spec: str, now: datetime) -> datetime:
 
 
 class EnergyDataInterface:
-    """Synthetic stand-in for the real InfluxDB client -- same method
-    signature, reads from a shared TimeSeriesStore instead."""
+    """Synthetic stand-in for the real InfluxDB client. """
 
     def __init__(self, store: TimeSeriesStore | None = None):
         self.store = store if store is not None else TimeSeriesStore(DEFAULT_STORE_PATH)

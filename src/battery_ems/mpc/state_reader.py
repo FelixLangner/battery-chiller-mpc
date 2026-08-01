@@ -4,26 +4,19 @@ from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
+
 from battery_ems.interfaces.influx import EnergyDataInterface
 from battery_ems.interfaces.meter_config import load_meter_config
 
 log = logging.getLogger(__name__)
 
-# Clock StateReader anchors "now" to when reading the synthetic store.
-# Defaults to real wall-clock time; run_synthetic_demo.py overrides this via
-# set_clock() to drive reads from a SyntheticBuilding's own simulated clock
-# instead -- otherwise a fast-forwarded run's synthetic data (timestamped
-# ahead of real time) would never satisfy `index <= target_ts` and every
-# read would return NaN. (forecast_provider.py's weather/tariff scheduling
-# intentionally still uses real wall-clock time -- DWD is a live external
-# service anchored to the real clock regardless of simulated drift, and
-# tariff/comfort-hour logic only depends on hour-of-day, which staying
-# close to real time keeps sane.)
+
 def _clock() -> datetime:
     return datetime.now(timezone.utc)
 
 
 def set_clock(fn) -> None:
+    """Override wall-clock time for demo testing, so we can simulate a real-time MPC without waiting for real time to pass."""
     global _clock
     _clock = fn
 

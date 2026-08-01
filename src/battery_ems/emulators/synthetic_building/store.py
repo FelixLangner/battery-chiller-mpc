@@ -1,13 +1,6 @@
 """
-TimeSeriesStore: stands in for "what InfluxDB would have recorded" for the
-synthetic digital-twin building. A single time-indexed pandas.DataFrame
-(one column per synthetic signal), persisted to one parquet file --
-deliberately not a database: this is a demo, not a production system, and
-the real repo has no DB dependency to begin with.
-
-Supports the one operation every caller in the ported codebase actually
-needs: an arbitrary [start, end] range query at a given resample resolution,
-standing in for Influx's aggregateWindow.
+TimeSeriesStore: stands in for "what InfluxDB would have recorded" in the real deployment.
+A single time-indexed pandas.DataFrame stored to one parquet file.
 """
 from pathlib import Path
 

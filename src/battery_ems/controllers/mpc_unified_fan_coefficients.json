@@ -1,10 +1,25 @@
 {
-  "room_1": {"unified_slope_W_per_C": -180.0, "unified_slope_kW_per_C": -0.18},
-  "room_2": {"unified_slope_W_per_C": -180.0, "unified_slope_kW_per_C": -0.18},
-  "room_3": {"unified_slope_W_per_C": -220.0, "unified_slope_kW_per_C": -0.22},
-  "room_4": {"unified_slope_W_per_C": -280.0, "unified_slope_kW_per_C": -0.28},
-  "room_5": {"unified_slope_W_per_C": -320.0, "unified_slope_kW_per_C": -0.32},
+  "room_1": {
+    "unified_slope_W_per_C": -168.33,
+    "unified_slope_kW_per_C": -0.16833
+  },
+  "room_2": {
+    "unified_slope_W_per_C": -188.38,
+    "unified_slope_kW_per_C": -0.18838
+  },
+  "room_3": {
+    "unified_slope_W_per_C": -210.19,
+    "unified_slope_kW_per_C": -0.21019
+  },
+  "room_4": {
+    "unified_slope_W_per_C": -266.65,
+    "unified_slope_kW_per_C": -0.26665
+  },
+  "room_5": {
+    "unified_slope_W_per_C": -292.68,
+    "unified_slope_kW_per_C": -0.29268
+  },
   "_meta": {
-    "source": "hand-authored synthetic ground truth, not fit from real data"
+    "source": "fit_synthetic_models.py, refit from data/synthetic_store.parquet"
   }
 }

@@ -6,17 +6,17 @@
     "Total_Thermal_Load_kW": 0.0
   },
   "plant_thermal_model_off": {
-    "Intercept": 0.85,
-    "T_sup_current": 0.90,
-    "EnvTmp": 0.032,
-    "Total_Thermal_Load_kW": -0.28
+    "Intercept": 0.85981,
+    "T_sup_current": 0.89988,
+    "EnvTmp": 0.03161,
+    "Total_Thermal_Load_kW": 0.0
   },
   "plant_thermal_model": {
-    "Intercept": 0.85,
-    "T_sup_current": 0.90,
-    "Chiller_Command": -6.0,
-    "EnvTmp": 0.032,
-    "Total_Thermal_Load_kW": -0.28
+    "Intercept": 0.85981,
+    "T_sup_current": 0.89988,
+    "Chiller_Command": -3.65,
+    "EnvTmp": 0.03161,
+    "Total_Thermal_Load_kW": 0.0
   },
   "chiller_power_model": {
     "standby_kW": 0.05,
@@ -34,6 +34,6 @@
     "Chiller_Command": 1.0
   },
   "_meta": {
-    "source": "hand-authored synthetic ground truth, not fit from real data"
+    "source": "fit_synthetic_models.py, refit from data/synthetic_store.parquet"
   }
 }

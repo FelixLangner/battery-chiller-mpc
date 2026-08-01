@@ -1,20 +1,10 @@
 """
 SyntheticBuilding: the "digital twin" ground-truth building. Owns 5 rooms'
-RCPlant instances, a chiller with its own T_sup response (mirroring the
-ON/OFF regime structure `gurobipy_mpc.py` expects, but as a SEPARATE set of
-hand-authored constants from the MPC's own belief in
-controllers/mpc_plant_power_coefs.json -- a fitted model is never a perfect
-match to the real system it controls, and keeping these independent is more
-realistic than trivially matching them by construction), and simple diurnal
+RCPlant instances, a chiller with its own T_sup response and simple diurnal
 weather/PV-irradiance generation.
 
 Advances one 5-min physics step at a time via step(), writing the resulting
-readings into a shared TimeSeriesStore -- the same one the synthetic
-`EnergyDataInterface` (interfaces/influx.py) reads from, so `run_mpc.py`'s
-control loop and this simulator interact only through that store plus
-`PLC_API` (interfaces/PLC_API.py), exactly mirroring how the private repo's
-`run_mpc.py` interacts with the real building only through InfluxDB reads
-and PLC writes.
+readings into a shared TimeSeriesStore.
 """
 import math
 from datetime import datetime, timedelta
@@ -22,7 +12,7 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from battery_ems.emulators.battery.battery import Battery
-from battery_ems.emulators.synthetic_building.rc_plant import RCPlant, ROOM_PARAMS
+from battery_ems.emulators.synthetic_building.rc_plant import ROOM_PARAMS, RCPlant
 
 DT_SECONDS = 300
 DT_HOURS = DT_SECONDS / 3600.0
@@ -61,10 +51,14 @@ FAN_SLOPE_KW_PER_C = {
 CHILLER_COMMAND_THRESHOLD_C = 14.0
 
 
-def _diurnal_weather(t: datetime, rng: np.random.Generator) -> tuple[float, float]:
-    """Simple plausible diurnal ambient temp (°C) + solar irradiance (W/m²)."""
+def _diurnal_weather(t: datetime, rng: np.random.Generator, T_amb_offset: float = 0.0) -> tuple[float, float]:
+    """Simple plausible diurnal ambient temp (°C) + solar irradiance (W/m²).
+    T_amb_offset shifts the whole diurnal band -- e.g. +10 gives a 28-40°C
+    heat-wave scenario, hot enough that the chiller has to run to hold the
+    22-24°C daytime comfort band (see forecast_provider.py's comfort
+    schedule), instead of the default 18-30°C band that rarely forces it."""
     hour = t.hour + t.minute / 60.0
-    T_amb = 24.0 + 6.0 * math.sin(2 * math.pi * (hour - 8) / 24) + rng.normal(0, 0.3)
+    T_amb = 24.0 + T_amb_offset + 6.0 * math.sin(2 * math.pi * (hour - 8) / 24) + rng.normal(0, 0.3)
     if 6 <= hour <= 19:
         solar = max(0.0, 700.0 * math.sin(math.pi * (hour - 6) / 13)) + rng.normal(0, 15)
         solar = max(0.0, solar)
@@ -85,10 +79,11 @@ def _diurnal_pv_load(t: datetime, solar_wm2: float, rng: np.random.Generator) ->
 
 
 class SyntheticBuilding:
-    def __init__(self, store, start_time: datetime, seed: int = 42):
+    def __init__(self, store, start_time: datetime, seed: int = 42, T_amb_offset: float = 0.0):
         self.store = store
         self.time = start_time
         self.rng = np.random.default_rng(seed)
+        self.T_amb_offset = T_amb_offset
         self.rooms = {r: RCPlant(p, x0=(23.0, 23.0)) for r, p in ROOM_PARAMS.items()}
         self.T_sup = 18.0
         self._commanded_setpoint = 20.0  # starts "off"
@@ -130,7 +125,7 @@ class SyntheticBuilding:
 
     def step(self) -> dict:
         self.time = self.time + timedelta(seconds=DT_SECONDS)
-        T_amb, solar_wm2 = _diurnal_weather(self.time, self.rng)
+        T_amb, solar_wm2 = _diurnal_weather(self.time, self.rng, self.T_amb_offset)
         solar_kwm2 = solar_wm2 / 1000.0
 
         room_Q_kw = {}

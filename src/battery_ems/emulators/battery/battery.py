@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class Battery:
     """
     Emulator for a residential battery energy storage system.

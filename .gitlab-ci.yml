@@ -1,4 +1,7 @@
-# Use a modern Python image from Docker Hub
+# Ported from the private repo's .gitlab-ci.yml. None of this repo's tests
+# touch Gurobi (no test builds/solves the MPC model), so CI doesn't need a
+# Gurobi license to pass -- gurobipy is still a runtime dependency
+# (pip install -e . installs it), it's just never exercised here.
 image: python:3.12
 
 # Define the stages of our pipeline

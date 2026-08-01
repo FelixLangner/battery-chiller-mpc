@@ -1,12 +1,6 @@
 """
 Simple deterministic PV/load forecast for the demo's joint cooling+PV+battery
-MPC -- NOT a port of the private repo's live Chronos-2 + 14-day-history
-pipeline (chronos_pv_load_provider.py + data_processing/aggregator.py),
-which needs a whole real-meter preprocessing chain out of scope for this
-demo (see README's "what's simplified" section). A smooth clear-sky/diurnal
-projection instead, using the same functional shape
-emulators/synthetic_building/plant.py's ground-truth `_diurnal_pv_load` does
-(minus its noise term -- a forecast is a smooth prediction, not a sample).
+MPC. In the real deplyoment, Chronos2 is applied for forecasting.
 """
 import math
 from datetime import datetime, timedelta

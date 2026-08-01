@@ -1,8 +1,9 @@
-from datetime import datetime, timedelta
-import pytz
-import pandas as pd
-from battery_ems.mpc.dwd import get_forecast_weather
+from datetime import datetime, timedelta, timezone
 
+import pandas as pd
+import pytz
+
+from battery_ems.mpc.dwd import get_forecast_weather
 
 """ Weather Forecast"""
 # round to full hours
@@ -40,11 +41,13 @@ def Forecasting(time_now, timestep, H):
     Ta = df_weather_forecast["Ta"]
     qs = df_weather_forecast["qs"]
     # remove data that is older than 15 minutes (i.e., one time step)
-    time_threshold = datetime.utcnow() - timedelta(minutes=15)
+    # naive-UTC, matching Ta.index's convention (dwd.py's tz_convert(None))
+    utc_now = datetime.now(timezone.utc).replace(tzinfo=None)
+    time_threshold = utc_now - timedelta(minutes=15)
 
     # Check if the first value in the Series is in the future.
     # if so: copy this value for the previous time steps
-    if Ta.index[0] > datetime.utcnow():
+    if Ta.index[0] > utc_now:
         new_index = pd.date_range(start=Ta.index[0]-timedelta(minutes=15), end=time_threshold, freq='-15min')
         Ta_new = pd.Series(data=[Ta.iloc[0]] * len(new_index), index=new_index)
         qs_new = pd.Series(data=[qs.iloc[0]] * len(new_index), index=new_index)
@@ -57,5 +60,5 @@ def Forecasting(time_now, timestep, H):
     return [qs, Ta]
 
 if __name__ == "__main__":
-    [qs, Ta] = Forecasting(datetime.now(), 5, 24)
+    [qs, Ta] = Forecasting(datetime.now(), 5, 24)  # noqa: DTZ005 -- naive LOCAL time is the contract (see localize() above)
     print("Forecasting completed successfully.")

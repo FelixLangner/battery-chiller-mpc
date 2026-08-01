@@ -77,7 +77,7 @@ def test_comfort_schedule_mode_end_exactly_at_step_time_counts_as_past_handoff()
     # (>=, not >) -- the handoff is effectively instantaneous at that instant.
     now = datetime(2026, 7, 22, 7, 0, tzinfo=timezone.utc)  # office hours
     mode_end = now  # handoff is "now"
-    T_min, T_max = ForecastProvider._comfort_schedule(1, now, ROOMS, mode_end=mode_end)
+    _T_min, T_max = ForecastProvider._comfort_schedule(1, now, ROOMS, mode_end=mode_end)
     assert T_max["room_1"] == [28.0]
 
 
@@ -87,3 +87,46 @@ def test_comfort_schedule_mode_end_none_is_a_no_op():
     T_min_b, T_max_b = ForecastProvider._comfort_schedule(10, now, ROOMS)
     assert T_min_a == T_min_b
     assert T_max_a == T_max_b
+
+
+# --- _tariff_schedule / _sell_tariff_schedule --------------------------------
+
+def test_tariff_schedule_peak_hours_are_more_expensive_than_off_peak():
+    # 19:00 Berlin (CEST, UTC+2) -> 17:00 UTC, inside the 17-21 local peak window
+    peak = datetime(2026, 7, 22, 17, 0, tzinfo=timezone.utc)
+    off_peak = datetime(2026, 7, 22, 3, 0, tzinfo=timezone.utc)  # 05:00 Berlin
+    peak_price = ForecastProvider._tariff_schedule(1, peak)[0]
+    off_peak_price = ForecastProvider._tariff_schedule(1, off_peak)[0]
+    assert peak_price > off_peak_price
+
+
+def test_sell_tariff_midday_dip_is_cheaper_than_other_hours():
+    # 12:00 Berlin -> 10:00 UTC, inside the 10-16 local midday dip
+    midday = datetime(2026, 7, 22, 10, 0, tzinfo=timezone.utc)
+    evening = datetime(2026, 7, 22, 17, 0, tzinfo=timezone.utc)  # 19:00 Berlin
+    midday_sell = ForecastProvider._sell_tariff_schedule(1, midday)[0]
+    evening_sell = ForecastProvider._sell_tariff_schedule(1, evening)[0]
+    assert midday_sell < evening_sell
+
+
+def test_sell_tariff_always_below_buy_tariff():
+    """Grid arbitrage isn't free money -- selling should never be pricier
+    than buying at the same hour, at any hour of the day."""
+    now = datetime(2026, 7, 22, 0, 0, tzinfo=timezone.utc)
+    horizon_steps = 24 * 12  # 24h at 5-min resolution, covers every hour once
+    buy = ForecastProvider._tariff_schedule(horizon_steps, now)
+    sell = ForecastProvider._sell_tariff_schedule(horizon_steps, now)
+    assert all(s < b for s, b in zip(sell, buy))
+
+
+def test_get_includes_sell_tariffs_alongside_buy_tariffs(monkeypatch):
+    """get()'s returned dict must carry both -- the joint cooling+PV+battery
+    MPC's objective needs sell_tariffs to value grid export."""
+    provider = ForecastProvider()
+    monkeypatch.setattr(provider, "_fetch", lambda horizon_steps, now, T_amb_current: (
+        [T_amb_current] * horizon_steps, [0.0] * horizon_steps
+    ))
+    forecasts = provider.get(3, T_amb_current=25.0, rooms=ROOMS)
+    assert "tariffs" in forecasts
+    assert "sell_tariffs" in forecasts
+    assert len(forecasts["sell_tariffs"]) == 3

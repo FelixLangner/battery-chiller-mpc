@@ -1,5 +1,7 @@
-import yaml
 from pathlib import Path
+
+import yaml
+
 
 def load_meter_config(file_name: str = "meters_demo.yaml") -> dict:
     """
