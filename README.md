@@ -73,8 +73,8 @@ specifically because of this:
 $$
 \min \quad
 \underbrace{\sum_{t=0}^{H-1} \Big( P^{\mathrm{grid,imp}}_t\, c^{\mathrm{buy}}_t - P^{\mathrm{grid,exp}}_t\, c^{\mathrm{sell}}_t \Big)\, \Delta t}_{\text{grid cost (chiller + fans + battery net of PV)}}
-\;+\;
-\underbrace{\sum_{r\in\mathcal{R}}\sum_{t=0}^{H-1} w^{T}_r\, s^{T}_{r,t} \;+\; \sum_{t=0}^{H-1} w^{\mathrm{Tsup}}\, s^{\mathrm{Tsup}}_t \;+\; \sum_{r\in\mathcal{R}}\sum_{t\,:\,k(t)\,\ge\,K_{\mathrm{bin}}} w^{\mathrm{fan}}_r\, s^{\mathrm{fan}}_{r,t}}_{\text{comfort and physical-floor slack penalties}}
++
+\underbrace{\sum_{r\in\mathcal{R}}\sum_{t=0}^{H-1} w^{T}_r\, s^{T}_{r,t} + \sum_{t=0}^{H-1} w^{\mathrm{Tsup}}\, s^{\mathrm{Tsup}}_t +\\sum_{r\in\mathcal{R}}\sum_{t\,:\,k(t)\,\ge\,K_{\mathrm{bin}}} w^{\mathrm{fan}}_r\, s^{\mathrm{fan}}_{r,t}}_{\text{comfort and physical-floor slack penalties}}
 $$
 
 where $\Delta t = 5/60$ h and $s^{(\cdot)}$ are soft-penalty slacks (a
