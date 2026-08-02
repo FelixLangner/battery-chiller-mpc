@@ -1,5 +1,7 @@
 # battery_chiller_ems (synthetic demo)
 
+[![CI](https://github.com/FelixLangner/battery-chiller-mpc/actions/workflows/ci.yml/badge.svg)](https://github.com/FelixLangner/battery-chiller-mpc/actions/workflows/ci.yml)
+
 A synthetic demonstration of a Model Predictive Control
 system for a residential building with PV, battery, and a chiller/fan-coil
 cooling system. It minimizes electricity cost subject to thermal comfort,
@@ -143,7 +145,8 @@ sensor reading), `Chiller_On_prev`, `SOC_current`.
 | `src/scripts/` | Standalone scripts                                                                                                                                              |
 | `tests/` | Unit tests (no Gurobi solve required to run them)                                                                                                               |
 | `meters_demo.yaml` | Synthetic meter config                                                                                          |
-| `.gitlab-ci.yml` | CI: lint + unit tests                                                                                                                                           |
+| `.github/workflows/ci.yml` | CI (GitHub Actions, runs on push/PR): lint + unit tests                                                                                                         |
+| `.gitlab-ci.yml` | Same CI, GitLab syntax                                                                         |
 
 ## Getting started
 
